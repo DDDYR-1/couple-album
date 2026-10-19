@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我们的旅行相册｜共享云端</title>
+    <style>
+        * {margin:0;padding:0;box-sizing:border-box;font-family:system-ui, sans-serif;}
+        body {background:#fff7f9;color:#444;padding-bottom:80px;}
+        header {background:#f8c8dc;text-align:center;padding:30px 16px;}
+        header h1 {color:#883a5c;margin-bottom:8px;font-size:26px;}
+        header p {color:#704055;font-size:16px;}
+        .container {max-width:1200px;margin:0 auto;padding:20px 16px;}
+        .upload-box{
+            background:#fff;
+            padding:20px;border-radius:16px;
+            box-shadow:0 3px 10px rgba(160, 80, 110,0.12);
+            margin-bottom:30px;
+        }
+        .upload-box h2{color:#914568;margin-bottom:16px;font-size:20px}
+        .form-item{margin-bottom:14px;}
+        .form-item label{display:block;margin-bottom:6px;color:#666}
+        .form-item input{
+            width:100%;padding:10px 12px;border:1px solid #f0d2de;border-radius:8px;font-size:16px;
+        }
+        button{
+            background:#f8c8dc;color:#772f50;border:none;padding:12px 20px;border-radius:10px;font-size:16px;cursor:pointer;
+        }
+        .btn-group{display:flex;gap:10px;flex-wrap:wrap;}
+        .photo-grid{
+            display:grid;
+            grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));
+            gap:20px;
+        }
+        .photo-card{
+            background:white;border-radius:16px;overflow:hidden;
+            box-shadow:0 4px 12px rgba(160,80,110,0.12);
+        }
+        .photo-card img{width:100%;height:200px;object-fit:cover;display:block;cursor:pointer;}
+        .photo-info{padding:14px;}
+        .photo-info h3{font-size:16px;color:#772f50;margin-bottom:4px;}
+        .photo-info p{font-size:13px;color:#666;}
+        .del-btn{margin-top:8px;background:#ffdddd;color:#992222;padding:6px 10px;font-size:13px;width:100%;}
+        footer{text-align:center;padding:20px;color:#88546b;margin-top:20px;}
+        /* 大图弹窗 */
+        .lightbox{
+            position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.9);
+            display:none;align-items:center;justify-content:center;z-index:9999;padding:20px;
+        }
+        .lightbox img{max-width:92%;max-height:92%;border-radius:8px;}
+        .lightbox.active{display:flex;}
+        .loading{text-align:center;padding:20px;color:#914568;font-size:18px;}
+    </style>
+</head>
+<body>
+<header>
+    <h1>我们的旅行相册</h1>
+    <p>云端共享，记录每一次一起出发的美好瞬间</p>
+</header>
+<div class="container">
+    <div class="upload-box">
+        <h2>➕ 添加新照片（手机相册直接上传）</h2>
+        <div class="form-item">
+            <label>选择照片</label>
+            <input type="file" id="imgFile" accept="image/*">
+        </div>
+        <div class="form-item">
+            <label>旅途标题</label>
+            <input type="text" id="title" placeholder="例：秦皇岛海边一日游">
+        </div>
+        <div class="form-item">
+            <label>地点</label>
+            <input type="text" id="place" placeholder="例：河北秦皇岛">
+        </div>
+        <div class="form-item">
+            <label>出行日期</label>
+            <input type="date" id="travelDate">
+        </div>
+        <div class="btn-group">
+            <button onclick="uploadPhoto()">上传并保存</button>
+        </div>
+    </div>
+    <div class="loading" id="loading">加载照片中...</div>
+    <div class="photo-grid" id="grid"></div>
+</div>
+<div class="lightbox" onclick="closeLight()">
+    <img id="bigImg">
+</div>
+<footer>愿我们继续去往更多地方 💛</footer>
+
+<script>
+// ======================【在这里修改！填入你的github信息】======================
+const GITHUB_USER = "DDDYR-1";
+const GITHUB_REPO = "couple-album";
+const GITHUB_TOKEN = "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";
+// =========================================================================
+
+const FILE_PATH = "album.json";
+
+// 页面加载读取相册
+window.onload = fetchAlbum;
+
+// 读取github上的相册json
+async function fetchAlbum(){
+    document.getElementById("loading").style.display = "block";
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
+        headers:{
+            "Authorization":`token ${GITHUB_TOKEN}`
+        }
+    });
+    const data = await res.json();
+    // base64解码
+    const raw = atob(data.content);
+    window.sha = data.sha; //保存sha，用于更新文件
+    const photoList = JSON.parse(raw);
+    photoList.sort((a,b)=>new Date(b.travel_date) - new Date(a.travel_date));
+    renderPhotos(photoList);
+    document.getElementById("loading").style.display = "none";
+}
+
+// 渲染相册卡片
+function renderPhotos(list) {
+    const grid = document.getElementById("grid");
+    grid.innerHTML = "";
+    list.forEach((item, index)=>{
+        const div = document.createElement("div");
+        div.className = "photo-card";
+        div.innerHTML = `
+            <img src="${item.img_url}" onclick="openLight('${item.img_url}')">
+            <div class="photo-info">
+                <h3>${item.title}</h3>
+                <p>${item.place}｜${item.travel_date}</p>
+                <button class="del-btn" onclick="deletePhoto(${index})">删除</button>
+            </div>
+        `
+        grid.appendChild(div);
+    })
+}
+
+// 上传图片到 Imgur 图床
+async function uploadPhoto(){
+    const fileInput = document.getElementById("imgFile");
+    const title = document.getElementById("title").value.trim();
+    const place = document.getElementById("place").value.trim();
+    const travelDate = document.getElementById("travelDate").value;
+    const file = fileInput.files[0];
+    if(!file || !title || !place || !travelDate){
+        alert("请选择图片，填写全部信息！");
+        return;
+    }
+    alert("正在上传图片，请稍等...");
+    const formData = new FormData();
+    formData.append("image", file);
+    // Imgur公开客户端ID
+    const imgRes = await fetch("https://api.imgur.com/3/image",{
+        method:"POST",
+        headers:{
+            Authorization:"Client-ID 546c25a59c58ad7"
+        },
+        body:formData
+    })
+    const imgJson = await imgRes.json();
+    if(!imgJson.success){
+        alert("图片上传失败："+imgJson.data.error);
+        return;
+    }
+    const imgUrl = imgJson.data.link;
+
+    // 获取旧数据
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
+        headers:{
+            "Authorization":`token ${GITHUB_TOKEN}`
+        }
+    })
+    const binData = await res.json();
+    let photoArr = JSON.parse(atob(binData.content));
+    photoArr.push({
+        title,
+        place,
+        travel_date: travelDate,
+        img_url: imgUrl
+    })
+    //写回github
+    const updateRes = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
+        method:"PUT",
+        headers:{
+            "Authorization":`token ${GITHUB_TOKEN}`,
+            "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+            message:"add new photo",
+            content:btoa(JSON.stringify(photoArr)),
+            sha: binData.sha
+        })
+    })
+    alert("✅ 上传成功！");
+    fileInput.value = "";
+    document.getElementById("title").value = "";
+    document.getElementById("place").value = "";
+    document.getElementById("travelDate").value = "";
+    fetchAlbum();
+}
+
+// 删除照片
+async function deletePhoto(index){
+    if(!confirm("确定删除这张照片吗？")) return;
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
+        headers:{
+            "Authorization":`token ${GITHUB_TOKEN}`
+        }
+    })
+    const binData = await res.json();
+    let photoArr = JSON.parse(atob(binData.content));
+    photoArr.splice(index,1);
+    await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
+        method:"PUT",
+        headers:{
+            "Authorization":`token ${GITHUB_TOKEN}`,
+            "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+            message:"delete photo",
+            content:btoa(JSON.stringify(photoArr)),
+            sha: binData.sha
+        })
+    })
+    fetchAlbum();
+}
+
+// 大图预览弹窗
+function openLight(src){
+    document.getElementById("bigImg").src = src;
+    document.querySelector(".lightbox").classList.add("active");
+}
+function closeLight(){
+    document.querySelector(".lightbox").classList.remove("active");
+}
+</script>
+</body>
+</html>
